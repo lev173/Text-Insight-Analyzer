@@ -1,3 +1,4 @@
+![Chart Result](word_frequency_chart.png)
 # Text Insight Analyzer
 
 A Python-based tool for automated text analysis, sentiment detection, and data visualization.
