@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .env
 word_frequency_chart.png
+downloads/
+bot_chart.png

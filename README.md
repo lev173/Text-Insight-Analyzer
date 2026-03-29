@@ -1,4 +1,3 @@
-![Chart Result](word_frequency_chart.png)
 # Text Insight Analyzer
 
 A Python-based tool for automated text analysis, sentiment detection, and data visualization.
@@ -9,13 +8,13 @@ A Python-based tool for automated text analysis, sentiment detection, and data v
 * Statistics: Calculates word frequency and sentence count.
 * Visualization: Generates a bar chart of the top 10 most frequent words.
 
-# Tech Stack
+##  Tech Stack
 * Python 3.10+
-* NLTK / TextBlob (Natural Language Processing)
-* Pandas (Data structures)
-* Matplotlib (Visualization)
+* Aiogram 3.x (Telegram Bot Framework)
+* NLTK / TextBlob (NLP)
+* Pandas / Matplotlib (Data Science)
 
-# Installation & Usage
-1. Clone the repository and install dependencies:
+##  Installation & Setup
+1. Clone the repository:
    ```bash
    pip install nltk pandas textblob matplotlib
