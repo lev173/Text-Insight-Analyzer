@@ -1,0 +1,9 @@
+aiogram
+nltk
+textblob
+pandas
+matplotlib
+openpyxl
+requests
+beautifulsoup4
+streamlit
