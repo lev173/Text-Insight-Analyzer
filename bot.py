@@ -5,7 +5,6 @@ import string
 from collections import Counter
 
 import nltk
-import pandas as pd
 import matplotlib.pyplot as plt
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -13,141 +12,148 @@ from aiogram.types import FSInputFile
 from textblob import TextBlob
 from nltk.corpus import stopwords
 
+from db_manager import init_db, register_user, log_analysis, get_user_stats, get_leaderboard
+
 # --- CONFIGURATION ---
-# Replace with your actual token from @BotFather
 TOKEN = "YOUR_BOT_TOKEN_HERE"
 
-# Initialize Bot and Dispatcher
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# NLTK Downloads (Ensuring all resources are present)
+# NLTK Setup
 nltk.download('punkt')
 nltk.download('punkt_tab')
 nltk.download('stopwords')
 
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 
 def process_text_analysis(text):
-    """
-    Core logic: Analyzes text and generates a frequency chart.
-    Returns: sentence count, word count, mood string, and sentiment score.
-    """
-    # 1. NLP Analysis
+    """Core logic: analyzes text and creates a visual chart."""
     blob = TextBlob(text)
     sentences_count = len(blob.sentences)
     sentiment = blob.sentiment.polarity 
 
-    # 2. Text Cleaning
+    # Text cleaning
     clean_text = text.translate(str.maketrans('', '', string.punctuation)).lower()
     words = nltk.word_tokenize(clean_text)
     
-    # Filtering stop words (English & Russian)
     stop_words = set(stopwords.words('english')) | set(stopwords.words('russian'))
     filtered_words = [w for w in words if w not in stop_words and len(w) > 2]
 
-    # 3. Stats & Chart
     word_counts = Counter(filtered_words)
     common_words = word_counts.most_common(10)
 
+    # Sentiment Mapping
     mood = "Neutral"
     if sentiment > 0.1: mood = "Positive 😊"
     elif sentiment < -0.1: mood = "Negative 😟"
 
-    # Create and save chart
+    # Chart creation
     if common_words:
         words_list, counts = zip(*common_words)
         plt.figure(figsize=(10, 6))
         plt.bar(words_list, counts, color='skyblue', edgecolor='navy')
-        plt.title('Top 10 Frequent Words')
+        plt.title('Top 10 Most Frequent Words')
+        plt.xlabel('Words')
+        plt.ylabel('Count')
         plt.grid(axis='y', linestyle='--', alpha=0.7)
         plt.savefig('bot_chart.png')
-        plt.close() # Important: close plot to prevent memory leaks
+        plt.close()
 
     return sentences_count, len(filtered_words), mood, sentiment
 
-# --- BOT HANDLERS ---
+# --- COMMAND HANDLERS ---
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    welcome_text = (
-        "👋 **Hello! I am your Text Analyzer Bot.**\n\n"
-        "Options:\n"
-        "1️⃣ Send me a **.txt file** for deep analysis.\n"
-        "2️⃣ Just **type or paste text** directly in the chat.\n\n"
-        "I will provide sentiment score and a frequency chart!"
+    await message.answer(
+        "👋 **Welcome to the AI Text Analyzer!**\n\n"
+        "I can help you analyze text sentiment and word frequency.\n"
+        "🏆 Use /top to see the leaderboard.\n"
+        "📝 Send me a **.txt file** or simply **type a message** to start!"
     )
-    await message.answer(welcome_text, parse_mode="Markdown")
+
+@dp.message(Command("top"))
+async def cmd_top(message: types.Message):
+    """Shows the top 5 most active users."""
+    leaders = get_leaderboard()
+    if not leaders:
+        await message.answer("🏆 The leaderboard is currently empty.")
+        return
+
+    text = "🏆 **Top 5 Text Analyzers:**\n\n"
+    for i, (username, count) in enumerate(leaders, 1):
+        name = f"@{username}" if username else "Anonymous"
+        text += f"{i}. {name} — {count} analyses\n"
+    
+    await message.answer(text, parse_mode="Markdown")
 
 @dp.message(F.document)
 async def handle_document(message: types.Message):
-    """Handles .txt file uploads."""
+    """Handles .txt file processing."""
     if not message.document.file_name.endswith('.txt'):
-        await message.answer("❌ Error: Please send only **.txt** files.")
+        await message.answer("❌ Error: I only accept **.txt** files.")
         return
 
-    await message.answer("📥 Processing file... please wait.")
-    
-    # Create downloads folder if not exists
+    register_user(message.from_user.id, message.from_user.username)
+    user_total = get_user_stats(message.from_user.id)
+
+    file_info = await bot.get_file(message.document.file_id)
     os.makedirs("downloads", exist_ok=True)
     file_path = f"downloads/{message.document.file_name}"
-    
-    # Download file
-    file_info = await bot.get_file(message.document.file_id)
     await bot.download_file(file_info.file_path, file_path)
 
-    # Read content
     try:
-        # Trying UTF-8, fallback to ignore errors for binary-like text
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
-        
-        if len(content.strip()) < 5:
-            await message.answer("⚠️ The file is too short for analysis.")
-            return
 
         s_count, w_count, mood, score = process_text_analysis(content)
-        
+        log_analysis(message.from_user.id, score)
+
         caption = (
-            f"📊 **File Analysis: {message.document.file_name}**\n"
+            f"📊 **File Report: {message.document.file_name}**\n"
             f"---------------------------\n"
             f"[*] Sentences: {s_count}\n"
-            f"[*] Meaningful words: {w_count}\n"
-            f"[*] Sentiment: {mood} ({score:.2f})"
+            f"[*] Sentiment: {mood} ({score:.2f})\n\n"
+            f"👤 **Your Profile:**\n"
+            f"Total requests: {user_total}"
         )
 
         chart = FSInputFile("bot_chart.png")
         await message.answer_photo(chart, caption=caption, parse_mode="Markdown")
-        
     except Exception as e:
-        await message.answer(f"⚙️ An error occurred during processing: {e}")
+        await message.answer(f"⚙️ An error occurred: {e}")
 
 @dp.message(F.text & ~F.command)
 async def handle_text_message(message: types.Message):
-    """Handles direct text messages."""
+    """Handles plain text messages."""
     if len(message.text) < 10:
-        await message.answer("ℹ️ Text is too short. Please send at least 10 characters.")
+        await message.answer("ℹ️ Text is too short for a meaningful analysis.")
         return
 
-    # Analyze direct text
+    register_user(message.from_user.id, message.from_user.username)
+    user_total = get_user_stats(message.from_user.id)
+
     s_count, w_count, mood, score = process_text_analysis(message.text)
+    log_analysis(message.from_user.id, score)
 
     caption = (
-        f"📝 **Quick Text Report**\n"
+        f"📝 **Quick Analysis Report**\n"
         f"---------------------------\n"
-        f"[*] Sentences: {s_count}\n"
-        f"[*] Meaningful words: {w_count}\n"
-        f"[*] Sentiment: {mood} ({score:.2f})"
+        f"[*] Sentiment: {mood} ({score:.2f})\n\n"
+        f"👤 **User Stats:**\n"
+        f"This is your request #{user_total}!"
     )
 
     chart = FSInputFile("bot_chart.png")
     await message.answer_photo(chart, caption=caption, parse_mode="Markdown")
 
-# --- MAIN ---
+# --- RUN BOT ---
 
 async def main():
-    print("Bot is starting...")
+    init_db() 
+    print("[OK] Database is ready.")
+    print("[OK] Bot is running...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
