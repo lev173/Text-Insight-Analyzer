@@ -1,20 +1,24 @@
-# Text Insight Analyzer
+# 📊 Advanced Text Insight Analyzer Bot
 
-A Python-based tool for automated text analysis, sentiment detection, and data visualization.
+An asynchronous Telegram bot built with **Aiogram 3.x** designed for deep linguistic text analysis, automated sentiment tracking, and word frequency visualization.
 
-# Features
-* Text Processing: Cleans data by removing punctuation and stop-words (English & Russian).
-* Sentiment Analysis: Detects the emotional tone of the text using `TextBlob`.
-* Statistics: Calculates word frequency and sentence count.
-* Visualization: Generates a bar chart of the top 10 most frequent words.
+## 🚀 Features
+- **Multilingual Support:** Smart stop-words filtering and metrics evaluation for both English and Russian texts.
+- **Sentiment Analysis:** Real-time emotional tone detection (Positive, Negative, Neutral) with custom vocabulary support for accurate Russian speech processing.
+- **Background Visuals:** Automatically generates clean, horizontal word frequency bar charts using Matplotlib's 'Agg' backend (headless mode, fully safe for remote servers).
+- **In-Memory Optimization:** Generates unique charts per user and immediately clears disk space (`os.remove`) after sending the message.
 
-##  Tech Stack
-* Python 3.10+
-* Aiogram 3.x (Telegram Bot Framework)
-* NLTK / TextBlob (NLP)
-* Pandas / Matplotlib (Data Science)
+## 🛠️ Tech Stack
+- **Language:** Python 3.11+
+- **Bot Framework:** Aiogram 3.x (Asyncio)
+- **Data & Analytics:** Pandas, TextBlob, Counter, Regex
+- **Visualization:** Matplotlib
 
-##  Installation & Setup
+## 📦 Installation & Setup
+
 1. Clone the repository:
-   ```bash
-   pip install nltk pandas textblob matplotlib
+```bash
+git clone [https://github.com/lev173/Text-Insight-Analyzer.git](https://github.com/lev173/Text-Insight-Analyzer.git)
+cd Text-Insight-Analyzer
+python -m pip install -r requirements.txt\
+python bot.py
