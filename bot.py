@@ -1,101 +1,83 @@
 import os
-import asyncio
-import logging
-import string
-from collections import Counter
-
-import nltk
-import matplotlib.pyplot as plt
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import FSInputFile
-from textblob import TextBlob
-from nltk.corpus import stopwords
+import asyncio
 
-# Custom imports
-from db_manager import init_db, register_user, log_analysis, get_user_stats, get_leaderboard, get_full_history_df
-from news_parser import get_tech_news
+# Импортируем наш обновленный профессиональный класс аналитики
+from analyzer import AdvancedTextAnalyzer
 
-# --- CONFIG ---
-TOKEN = os.getenv("BOT_TOKEN")
-bot = Bot(token=TOKEN)
+# Токен твоего бота (лучше использовать переменные окружения, но для теста оставляем явным)
+BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN" 
+
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-logging.basicConfig(level=logging.INFO)
-nltk.download('punkt')
-nltk.download('stopwords')
-
-def process_text_analysis(text):
-    blob = TextBlob(text)
-    sentiment = blob.sentiment.polarity 
-    clean_text = text.translate(str.maketrans('', '', string.punctuation)).lower()
-    words = nltk.word_tokenize(clean_text)
-    stop_words = set(stopwords.words('english')) | set(stopwords.words('russian'))
-    filtered_words = [w for w in words if w not in stop_words and len(w) > 2]
-
-    word_counts = Counter(filtered_words)
-    common_words = word_counts.most_common(10)
-    mood = "Positive 😊" if sentiment > 0.1 else "Negative 😟" if sentiment < -0.1 else "Neutral 😐"
-
-    if common_words:
-        words_list, counts = zip(*common_words)
-        plt.figure(figsize=(10, 6))
-        plt.bar(words_list, counts, color='skyblue')
-        plt.title('Analysis Result')
-        plt.savefig('bot_chart.png')
-        plt.close()
-
-    return len(blob.sentences), len(filtered_words), mood, sentiment
-
-# --- HANDLERS ---
-
 @dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    await message.answer("🚀 **AI News & Text Analyzer is Ready!**\n\nCommands:\n/news - Get & analyze tech news\n/top - Leaderboard\n/export - Get Excel report")
-
-@dp.message(Command("news"))
-async def cmd_news(message: types.Message):
-    msg = await message.answer("🌐 Fetching latest tech news from Hacker News...")
-    headlines = get_tech_news()
-    
-    if not headlines:
-        await msg.edit_text("❌ Error fetching news. Please try again later.")
-        return
-
-    full_text = ". ".join(headlines)
-    _, _, mood, score = process_text_analysis(full_text)
-    
-    # Save this analysis to DB for the bot owner
-    log_analysis(message.from_user.id, score)
-
-    response = (
-        f"🆕 **Latest Tech News Sentiment**\n"
-        f"Overall Mood: **{mood}** ({score:.2f})\n\n"
-        f"**Top Headlines:**\n"
+async def start_command(message: types.Message):
+    """Приветственное сообщение бота."""
+    await message.reply(
+        "👋 **Привет! Я профессиональный Text Insight Analyzer Bot.**\n\n"
+        "Отправь мне любой текст (на английском или русском языке), и я проведу "
+        "его полный лингвистический анализ, определю тональность текста "
+        "и построю для тебя график частоты слов!"
     )
-    for i, title in enumerate(headlines, 1):
-        response += f"{i}. {title}\n"
 
-    chart = FSInputFile("bot_chart.png")
-    await message.answer_photo(chart, caption=response)
+@dp.message(F.text)
+async def analyze_user_text(message: types.Message):
+    """Обработчик входящего текста для анализа."""
+    # Отправляем временный статус, чтобы пользователь видел, что бот работает
+    status_message = await message.answer("🔄 *Анализирую текст и генерирую инфографику...*")
+    
+    try:
+        # Инициализируем анализатор
+        analyzer = AdvancedTextAnalyzer()
+        
+        # Передаем текст сообщения напрямую в обработчик
+        report = analyzer.process_text_data(message.text, source_name=f"User_{message.from_user.id}")
+        
+        if not report:
+            await status_message.edit_text("❌ Текст слишком короткий или пустой для проведения анализа.")
+            return
 
-@dp.message(Command("top"))
-async def cmd_top(message: types.Message):
-    leaders = get_leaderboard()
-    text = "🏆 **Leaderboard:**\n" + "\n".join([f"{i+1}. @{u} - {c} reqs" for i, (u, c) in enumerate(leaders)])
-    await message.answer(text)
+        # Генерируем уникальное имя файла графика для текущего пользователя (чтобы сессии не пересекались)
+        chart_filename = f"chart_{message.from_user.id}.png"
+        analyzer.plot_statistics(report['common_words'], output_path=chart_filename)
 
-@dp.message(F.text & ~F.command)
-async def handle_text(message: types.Message):
-    register_user(message.from_user.id, message.from_user.username)
-    _, _, mood, score = process_text_analysis(message.text)
-    log_analysis(message.from_user.id, score)
-    chart = FSInputFile("bot_chart.png")
-    await message.answer_photo(chart, caption=f"Sentiment: {mood} ({score:.2f})")
+        # Формируем красивый отчет для Telegram
+        response_text = (
+            f"📊 **TEXT ANALYSIS REPORT**\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📝 *Количество предложений:* {report['sentences_count']}\n"
+            f"🔤 *Слов после очистки:* {report['words_cleaned_count']}\n"
+            f"🎭 *Тональность текста:* {report['mood']} ({report['sentiment_score']})\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔝 *Топ-3 частых слова:*\n"
+        )
+        
+        # Добавляем частые слова списком
+        for word, count in report['common_words'][:3]:
+            response_text += f"• `{word}`: {count} раз(а)\n"
+
+        # Удаляем временный статус «Анализирую...»
+        await status_message.delete()
+
+        # Если график успешно создан — отправляем фото с текстовым описанием в качестве подписи
+        if os.path.exists(chart_filename):
+            await message.answer_photo(
+                photo=types.FSInputFile(chart_filename),
+                caption=response_text
+            )
+            # Сразу удаляем локальный файл графика с диска, чтобы не засорять память Windows 11
+            os.remove(chart_filename)
+        else:
+            # Если по какой-то причине график не создался, просто отправляем текст
+            await message.answer(response_text)
+
+    except Exception as e:
+        await status_message.edit_text(f"❌ Произошла непредвиденная ошибка при анализе: {str(e)}")
 
 async def main():
-    init_db()
-    print("System Online...")
+    print("[*] Telegram Bot с интеграцией AdvancedTextAnalyzer успешно запущен...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
