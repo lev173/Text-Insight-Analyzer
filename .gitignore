@@ -1,7 +1,18 @@
-venv/
+# Игнорируем базы данных SQLite
+*.db
+*.sqlite3
+
+# Игнорируем любые автоматически сгенерированные графики и картинки
+*.png
+*.jpg
+*.jpeg
+
+# Игнорируем кэш Python
 __pycache__/
 *.pyc
-.env
-word_frequency_chart.png
-downloads/
-bot_chart.png
+
+# Игнорируем виртуальные окружения и папки IDE
+.venv/
+venv/
+.idea/
+.vscode/
