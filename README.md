@@ -20,5 +20,14 @@ An asynchronous Telegram bot built with **Aiogram 3.x** designed for deep lingui
 ```bash
 git clone [https://github.com/lev173/Text-Insight-Analyzer.git](https://github.com/lev173/Text-Insight-Analyzer.git)
 cd Text-Insight-Analyzer
-python -m pip install -r requirements.txt\
+```
+
+2. Install the required dependencies:
+```bash
+python -m pip install -r requirements.txt
+```
+
+3. Add your bot token to `bot.py` and run the application:
+```bash
 python bot.py
+```
